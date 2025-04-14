@@ -92,9 +92,9 @@ vector_size = 10*10 + 7 + 4
 
 def create_nn():
     #print(os.path.exists('/Users/tinaliang/Documents/COMP579/final_project/results/model.keras'))
-    if os.path.exists('/Users/tinaliang/Documents/COMP579/final_project/results/model.keras'):
+    if os.path.exists('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/model.keras'):
         print("loading model...")
-        return load_model('/Users/tinaliang/Documents/COMP579/final_project/results/model.keras')
+        return load_model('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/model.keras')
 
     model = Sequential()
     model.add(Dense(512, kernel_initializer='lecun_uniform', input_shape=(vector_size,))) # 7x7 + 3.  or 14x14 + 3
