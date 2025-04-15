@@ -17,6 +17,13 @@ import cv2
 np.float_ = np.float64
 np.bool8 = np.bool_
 
+action_space = [
+    [-1, 0, 0], 
+    [1,0,0], 
+    [0,1,0],
+    [0,0,0.5],
+    [0,0,0]]
+
 def plot_running_avg(totalrewards):
   N = len(totalrewards)
   running_avg = np.empty(N)
@@ -24,7 +31,7 @@ def plot_running_avg(totalrewards):
     running_avg[t] = totalrewards[max(0, t-100):(t+1)].mean()
   plt.plot(running_avg)
   plt.title("Running Average")
-  plt.savefig('results/run_avg_more_eps.png')
+  plt.savefig('results/run_avg_reduced_action_space_model.png')
   #plt.show()
 
 env = gym.make('CarRacing-v2')
@@ -92,15 +99,15 @@ vector_size = 10*10 + 7 + 4
 
 def create_nn():
     #print(os.path.exists('/Users/tinaliang/Documents/COMP579/final_project/results/model.keras'))
-    if os.path.exists('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/model.keras'):
+    if os.path.exists('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/reduced_action_space_model.keras'):
         print("loading model...")
-        return load_model('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/model.keras')
+        return load_model('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/reduced_action_space_model.keras')
 
     model = Sequential()
     model.add(Dense(512, kernel_initializer='lecun_uniform', input_shape=(vector_size,))) # 7x7 + 3.  or 14x14 + 3
     model.add(Activation('relu'))
 
-    model.add(Dense(11, kernel_initializer='lecun_uniform'))
+    model.add(Dense(5, kernel_initializer='lecun_uniform'))
     model.add(Activation('linear')) #linear output so we can have range of real-valued outputs
 
     adamax = Adamax() 
@@ -118,12 +125,12 @@ class Model:
         return self.model.predict(s.reshape(-1, vector_size), verbose=0)[0]
 
     def update(self, s, G):
-        self.model.fit(s.reshape(-1, vector_size), np.array(G).reshape(-1, 11), epochs=1, verbose=0)
+        self.model.fit(s.reshape(-1, vector_size), np.array(G).reshape(-1, 5), epochs=1, verbose=0)
 
     def sample_action(self, s, eps):
         qval = self.predict(s)
         if np.random.random() < eps:
-            return random.randint(0, 10), qval
+            return random.randint(0, len(action_space)-1), qval
         else:
             return np.argmax(qval), qval
 
@@ -177,7 +184,7 @@ def play_one(env, model, eps, gamma):
         state = np.concatenate((np.array([compute_steering_speed_gyro_abs(a)]).reshape(1,-1).flatten(), b.reshape(1,-1).flatten(), c), axis=0) # this is 3 + 7*7 size vector.  all scaled in range 0..1
         argmax_qval, qval = model.sample_action(state, eps)
         prev_state = state
-        action = convert_argmax_qval_to_env_action(argmax_qval)
+        action = action_space[argmax_qval]
         observation, reward, terminated, truncated, _ = env.step(action)
 
         done = terminated or truncated
@@ -213,26 +220,23 @@ for n in range(N):
     totalrewards[n] = totalreward
     if n % 1 == 0:
       print("episode:", n, "iters", iters, "total reward:", totalreward, "eps:", eps, "avg reward (last 100):", totalrewards[max(0, n-100):(n+1)].mean())
-    if n % 10 == 0:
-        model.model.save('model_more_eps.keras')
+    if n % 50 == 0:
+        print("saving model...")
+        model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/reduced_action_space_model.keras')
 
-print("avg reward for last 100 episodes:", totalrewards[-100:].mean())
-print("total steps:", totalrewards.sum())
-
-
-filename = f"results/continuous_dqn_car_racing_more_eps_eval.pkl"
-with open(filename, "wb") as f:
-    pickle.dump(totalrewards, f)
-print(f"wrote to pkl file. continuous_dqn_car_racing_more_eps_eval.pkl")
+        filename = f"results/reduced_action_space.pkl"
+        with open(filename, "wb") as f:
+            pickle.dump(totalrewards, f)
+        print(f"wrote to pkl file. reduced_action_space.pkl")
 
 plt.plot(totalrewards)
 plt.title("Rewards")
 #plt.show()
-plt.savefig('results/rewards_more_eps.png')
+plt.savefig('results/reduced_action_space.png')
 
 plot_running_avg(totalrewards)
 
-model.model.save('/Users/tinaliang/Documents/COMP579/final_project/results/model.keras')
+model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/reduced_action_space_model.keras')
 
 env.close()
 
@@ -250,7 +254,7 @@ while not done:
     state = np.concatenate((np.array([compute_steering_speed_gyro_abs(a)]).reshape(1,-1).flatten(), b.reshape(1,-1).flatten(), c), axis=0) # this is 3 + 7*7 size vector.  all scaled in range 0..1
     argmax_qval, qval = model.sample_action(state, 0)
     prev_state = state
-    action = convert_argmax_qval_to_env_action(argmax_qval)
+    action = action_space[argmax_qval]
     s, reward, terminated, truncated, _ = eval_env.step(action)
     totalreward += reward
     done = terminated or truncated
@@ -278,5 +282,5 @@ def animate(imgs, video_name, _return=True):
         return Video(video_name)
 
 print('recording video')
-animate(frames, "results/continuous_dqn_vid.webm")
+animate(frames, "results/reduced_action_space.webm")
     
