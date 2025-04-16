@@ -24,6 +24,8 @@ action_space = [
     [0,0,0.5],
     [0,0,0]]
 
+gas_actions = np.array([a[1] == 1 and a[2] == 0 for a in action_space])
+
 def plot_running_avg(totalrewards):
   N = len(totalrewards)
   running_avg = np.empty(N)
@@ -31,7 +33,7 @@ def plot_running_avg(totalrewards):
     running_avg[t] = totalrewards[max(0, t-100):(t+1)].mean()
   plt.plot(running_avg)
   plt.title("Running Average")
-  plt.savefig('results/run_avg_reduced_action_space_model.png')
+  plt.savefig('results/run_avg_prioritized_eps_exp.png')
   #plt.show()
 
 env = gym.make('CarRacing-v2')
@@ -99,9 +101,9 @@ vector_size = 10*10 + 7 + 4
 
 def create_nn():
     #print(os.path.exists('/Users/tinaliang/Documents/COMP579/final_project/results/model.keras'))
-    if os.path.exists('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/reduced_action_space_model.keras'):
+    if os.path.exists('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/prioritized_eps_exp_model.keras'):
         print("loading model...")
-        return load_model('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/reduced_action_space_model.keras')
+        return load_model('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/prioritized_eps_exp_model.keras')
 
     model = Sequential()
     model.add(Dense(512, kernel_initializer='lecun_uniform', input_shape=(vector_size,))) # 7x7 + 3.  or 14x14 + 3
@@ -130,7 +132,11 @@ class Model:
     def sample_action(self, s, eps):
         qval = self.predict(s)
         if np.random.random() < eps:
-            return random.randint(0, len(action_space)-1), qval
+            action_weights = 14.0 * gas_actions + 1.0
+            action_weights /= np.sum(action_weights)
+
+            return np.random.choice(len(action_space), p=action_weights), qval
+           # return random.randint(0, len(action_space)-1), qval
         else:
             return np.argmax(qval), qval
 
@@ -222,21 +228,21 @@ for n in range(N):
       print("episode:", n, "iters", iters, "total reward:", totalreward, "eps:", eps, "avg reward (last 100):", totalrewards[max(0, n-100):(n+1)].mean())
     if n % 50 == 0:
         print("saving model...")
-        model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/reduced_action_space_model.keras')
+        model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/prioritized_eps_exp_model.keras')
 
-        filename = f"results/reduced_action_space.pkl"
+        filename = f"results/prioritized_eps_exp.pkl"
         with open(filename, "wb") as f:
             pickle.dump(totalrewards, f)
-        print(f"wrote to pkl file. reduced_action_space.pkl")
+        print(f"wrote to pkl file. prioritized_eps_exp.pkl")
 
 plt.plot(totalrewards)
 plt.title("Rewards")
 #plt.show()
-plt.savefig('results/reduced_action_space.png')
+plt.savefig('results/prioritized_eps_exp.png')
 
 plot_running_avg(totalrewards)
 
-model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/reduced_action_space_model.keras')
+model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/prioritized_eps_exp_model.keras')
 
 env.close()
 
@@ -282,5 +288,5 @@ def animate(imgs, video_name, _return=True):
         return Video(video_name)
 
 print('recording video')
-animate(frames, "results/reduced_action_space.webm")
+animate(frames, "results/prioritized_eps_exp.webm")
     
