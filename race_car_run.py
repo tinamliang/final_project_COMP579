@@ -11,20 +11,16 @@ from tensorflow import keras
 from tf_keras.models import Sequential
 from tf_keras.layers import Dense, Activation
 from tf_keras.optimizers.legacy import Adamax
+import itertools as it
 from tf_keras.saving import load_model
 import cv2
 
 np.float_ = np.float64
 np.bool8 = np.bool_
 
-action_space = [
-    [-1, 0, 0], 
-    [1,0,0], 
-    [0,1,0],
-    [0,0,0.5],
-    [0,0,0]]
-
-gas_actions = np.array([a[1] == 1 and a[2] == 0 for a in action_space])
+all_actions = [[-1,0,0], [1,0,0], [0,1,0], [0,0,0.5], [0,0,0]]
+gas_actions = np.array([a[1] == 1 and a[2] == 0 and a[0] == 0 for a in all_actions])
+print(gas_actions)
 
 def plot_running_avg(totalrewards):
   N = len(totalrewards)
@@ -33,7 +29,7 @@ def plot_running_avg(totalrewards):
     running_avg[t] = totalrewards[max(0, t-100):(t+1)].mean()
   plt.plot(running_avg)
   plt.title("Running Average")
-  plt.savefig('results/run_avg_prioritized_eps_exp.png')
+  plt.savefig('results/run_avg_all_together.png')
   #plt.show()
 
 env = gym.make('CarRacing-v2')
@@ -101,9 +97,9 @@ vector_size = 10*10 + 7 + 4
 
 def create_nn():
     #print(os.path.exists('/Users/tinaliang/Documents/COMP579/final_project/results/model.keras'))
-    if os.path.exists('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/prioritized_eps_exp_model.keras'):
+    if os.path.exists('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/all_together.keras'):
         print("loading model...")
-        return load_model('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/prioritized_eps_exp_model.keras')
+        return load_model('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/all_together.keras')
 
     model = Sequential()
     model.add(Dense(512, kernel_initializer='lecun_uniform', input_shape=(vector_size,))) # 7x7 + 3.  or 14x14 + 3
@@ -129,14 +125,28 @@ class Model:
     def update(self, s, G):
         self.model.fit(s.reshape(-1, vector_size), np.array(G).reshape(-1, 5), epochs=1, verbose=0)
 
-    def sample_action(self, s, eps):
+    def sample_action(self, s, eps, warmup):
         qval = self.predict(s)
         if np.random.random() < eps:
-            action_weights = 14.0 * gas_actions + 1.0
-            action_weights /= np.sum(action_weights)
+            if warmup:
+                p_gas = 0.85
+                p_non_gas = 1.0 - p_gas  # 0.15
 
-            return np.random.choice(len(action_space), p=action_weights), qval
-           # return random.randint(0, len(action_space)-1), qval
+                n_gas = 3
+                n_non_gas = 12 - n_gas
+
+                n_gas = np.sum(gas_actions)
+                n_non_gas = len(all_actions) - n_gas
+
+                action_weights = np.zeros(len(all_actions), dtype=np.float32)
+                action_weights[gas_actions] = p_gas / n_gas
+                action_weights[~gas_actions] = p_non_gas / n_non_gas
+
+                # Sample
+                random_action = np.random.choice(len(all_actions), p=action_weights)
+                return random_action, qval
+            else:
+                return random.randint(0, len(all_actions)-1), qval
         else:
             return np.argmax(qval), qval
 
@@ -188,9 +198,16 @@ def play_one(env, model, eps, gamma):
     while not done:
         a, b, c = transform(observation)
         state = np.concatenate((np.array([compute_steering_speed_gyro_abs(a)]).reshape(1,-1).flatten(), b.reshape(1,-1).flatten(), c), axis=0) # this is 3 + 7*7 size vector.  all scaled in range 0..1
-        argmax_qval, qval = model.sample_action(state, eps)
+
+        if N < 80:
+            warmup = True
+        else:
+            warmup = False
+
+        argmax_qval, qval = model.sample_action(state, eps, warmup)
+
         prev_state = state
-        action = action_space[argmax_qval]
+        action = all_actions[argmax_qval]
         observation, reward, terminated, truncated, _ = env.step(action)
 
         done = terminated or truncated
@@ -208,16 +225,12 @@ def play_one(env, model, eps, gamma):
         totalreward += reward
         iters += 1
 
-        if iters > 1500:
-            print("This episode is stuck")
-            break
-
     return totalreward, iters
 
 model = Model(env)
 gamma = 0.99
 
-N = 550
+N = 551
 totalrewards = np.empty(N)
 costs = np.empty(N)
 for n in range(N):
@@ -228,12 +241,12 @@ for n in range(N):
       print("episode:", n, "iters", iters, "total reward:", totalreward, "eps:", eps, "avg reward (last 100):", totalrewards[max(0, n-100):(n+1)].mean())
     if n % 50 == 0:
         print("saving model...")
-        model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/prioritized_eps_exp_model.keras')
+        model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/all_together_model.keras')
 
-        filename = f"results/prioritized_eps_exp.pkl"
+        filename = f"/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/all_together_model.pkl"
         with open(filename, "wb") as f:
             pickle.dump(totalrewards, f)
-        print(f"wrote to pkl file. prioritized_eps_exp.pkl")
+        print(f"wrote to pkl file. all_together_model.pkl")
 
 plt.plot(totalrewards)
 plt.title("Rewards")
@@ -242,7 +255,7 @@ plt.savefig('results/prioritized_eps_exp.png')
 
 plot_running_avg(totalrewards)
 
-model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/prioritized_eps_exp_model.keras')
+model.model.save('/Users/tinaliang/Documents/COMP579/continuous_DQN_v2/code/results/all_together_model.keras')
 
 env.close()
 
@@ -260,7 +273,7 @@ while not done:
     state = np.concatenate((np.array([compute_steering_speed_gyro_abs(a)]).reshape(1,-1).flatten(), b.reshape(1,-1).flatten(), c), axis=0) # this is 3 + 7*7 size vector.  all scaled in range 0..1
     argmax_qval, qval = model.sample_action(state, 0)
     prev_state = state
-    action = action_space[argmax_qval]
+    action = all_actions[argmax_qval]
     s, reward, terminated, truncated, _ = eval_env.step(action)
     totalreward += reward
     done = terminated or truncated
@@ -288,5 +301,4 @@ def animate(imgs, video_name, _return=True):
         return Video(video_name)
 
 print('recording video')
-animate(frames, "results/prioritized_eps_exp.webm")
-    
+animate(frames, "all_together.webm")
