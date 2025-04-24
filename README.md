@@ -3,7 +3,7 @@
 ### Investigating Deep Q-Learning with Different Exploration Strategies for Autonomous Driving Environments
 
 In this project, we refer from the paper published by (Rodrigues and Vieira, "Optimizing agent training with deep q-learning on a self-
-driving reinforcement learning environment", 2020) that trains a DQN agent to optimally learn and navigate OpenAI's CarRacing-v2 environment autonomously.
+driving reinforcement learning environment", 2020) that trains a DQN agent to optimally learn and navigate OpenAI's [CarRacing-v2](https://www.gymlibrary.dev/environments/box2d/car_racing/) environment autonomously.
 
 We train the agent with some environment-specific adaptations and explore the agent's performance with more advanced RL strategies such as NoisyDQN and Random Network Distillation.
 
